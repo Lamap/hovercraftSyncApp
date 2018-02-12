@@ -1,11 +1,9 @@
 var mongoose = require('mongoose');
-var Image = require('./models/imageModel');
-var Tag = require('./models/tagModel');
-var Q = require('q');
-var Image = require('./models/imageModel');
-var mongoKey = require('./mongoKey');
+var Image = require('../models/imageModel');
+var mongoKey = require('../mongoKey');
+var mongoHelper = require('./mongoHelper');
 
-function syncDb(files) {
+function syncDb(files, callback) {
     mongoose.connect(mongoKey);
     var db = mongoose.connection;
 
@@ -26,7 +24,7 @@ function syncDb(files) {
 
         Image.find({}, function (err, result) {
             if (err) {
-                return console.error('Failed to get image list from MongoDb');
+                return callback('Failed to get image list from MongoDb');
             }
             images = result;
             images.map(function (image) {
@@ -35,7 +33,6 @@ function syncDb(files) {
             addImages();
         });
     }
-
     function addImages() {
         var newImageSaves = [];
         files.map(function (file) {
@@ -49,28 +46,13 @@ function syncDb(files) {
                newImageSaves.push(newImage);
            }
         });
-        function saveNextImage(index) {
-            if (!newImageSaves[index]) {
-                console.log((newImageSaves.length - failedSaves.length)
-                    + ' image of ' + newImageSaves.length + ' hase been added to Db');
-                return process.exit();
-            }
-            newImageSaves[index].save(function(err) {
-                if (err) {
-                    failedSaves.push({
-                        model: newImageSaves,
-                        err: err
-                    });
-                }
-                console.log('image saved '+ (index + 1) + ' from ' + newImageSaves.length);
-                saveNextImage(index + 1);
-            });
-        }
-
-        saveNextImage(0);
+        mongoHelper.sequenceSave(newImageSaves, function (fails) {
+            console.log(getNonExistingImages());
+            callback(newImageSaves.length + ' new images, fails:', fails.length);
+        })
     }
 
-    function markNonExistingImages() {
+    function getNonExistingImages() {
         //TODO
         return nonExistingImageIds = images.filter(function (image) {
            return !filesById[image.googleId];
@@ -78,4 +60,4 @@ function syncDb(files) {
     }
 }
 
-module.exports = syncDb;
+module.exports = {sync: syncDb};
